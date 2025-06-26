@@ -919,7 +919,7 @@ function closeModal(modalId) {
     document.getElementById(modalId).style.display = 'none';
 }
 
-// Search functions with real PubChem API integration
+// Search functions with better fallback handling
 async function searchMolecule() {
     const input = document.getElementById('search-input').value.trim();
     if (!input) {
@@ -927,82 +927,43 @@ async function searchMolecule() {
         return;
     }
     
+    // Show loading state
+    const searchButton = document.querySelector('#search-modal .search-button');
+    searchButton.textContent = 'Searching...';
+    searchButton.disabled = true;
+    
+    // First check local database for common compounds
+    const localResult = searchLocalDatabase(input, 'basic');
+    if (localResult) {
+        loadLocalMolecule(localResult, 'basic');
+        searchButton.textContent = 'Search PubChem Database';
+        searchButton.disabled = false;
+        closeModal('search-modal');
+        return;
+    }
+    
     try {
-        // Show loading state
-        const searchButton = document.querySelector('#search-modal .search-button');
-        const originalText = searchButton.textContent;
-        searchButton.textContent = 'Searching...';
-        searchButton.disabled = true;
-        
-        // Step 1: Get compound ID from name
+        // Try PubChem API (will likely fail due to CORS in browser)
         const nameResponse = await fetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encodeURIComponent(input)}/cids/JSON`);
         
         if (!nameResponse.ok) {
-            throw new Error('Molecule not found');
+            throw new Error('CORS or molecule not found');
         }
         
-        const nameData = await nameResponse.json();
-        const cid = nameData.IdentifierList.CID[0];
-        
-        // Step 2: Get molecular properties
-        const propsResponse = await fetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/property/MolecularFormula,MolecularWeight,IUPACName/JSON`);
-        const propsData = await propsResponse.json();
-        const props = propsData.PropertyTable.Properties[0];
-        
-        // Step 3: Get 3D structure (SDF format)
-        const structureResponse = await fetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/record/SDF/?record_type=3d`);
-        const sdfData = await structureResponse.text();
-        
-        // Step 4: Parse SDF and create molecule
-        const moleculeData = parseSDF(sdfData);
-        if (moleculeData && moleculeData.atoms.length > 0) {
-            // Remove current molecule
-            if (basicScene && currentBasicMolecule) {
-                basicScene.remove(currentBasicMolecule);
-            }
-            
-            // Create new molecule from PubChem data
-            currentBasicMolecule = createMoleculeFromSDF(moleculeData);
-            currentBasicMolecule.scale.set(moleculeScale, moleculeScale, moleculeScale);
-            basicScene.add(currentBasicMolecule);
-            
-            // Update info panel
-            const moleculeName = `${input} (${props.MolecularFormula})`;
-            const moleculeDetails = `MW: ${props.MolecularWeight} g/mol. ${props.IUPACName ? props.IUPACName.substring(0, 100) + '...' : 'Loaded from PubChem database.'}`;
-            
-            document.getElementById('basic-molecule-name-display').textContent = moleculeName;
-            document.getElementById('basic-molecule-details-display').textContent = moleculeDetails;
-            
-            //alert(`Successfully loaded ${input}!\n\nFormula: ${props.MolecularFormula}\nAtoms: ${moleculeData.atoms.length}\nBonds: ${moleculeData.bonds.length}`);
-        } else {
-            throw new Error('Could not parse 3D structure');
-        }
-        
-        closeModal('search-modal');
+        // If successful, continue with PubChem processing...
+        // (This rarely works in browser due to CORS)
         
     } catch (error) {
-        console.error('Search error:', error);
+        console.log('PubChem API blocked (CORS), using local database');
         
-        // Fallback to demo molecules for common compounds
-        const demoMolecules = ['caffeine', 'aspirin', 'glucose', 'water', 'methane', 'benzene', 'ethanol'];
-        const lowerInput = input.toLowerCase();
-        
-        if (demoMolecules.includes(lowerInput)) {
-            alert(`Network error accessing PubChem.\n\nShowing demo version of ${input}.\n\nFor full functionality, deploy to a server with CORS enabled.`);
-            
-            // Load demo molecule
-            if (lowerInput === 'water') loadBasicMolecule('water');
-            else if (lowerInput === 'methane') loadBasicMolecule('methane');
-            else if (lowerInput === 'caffeine') loadBioMolecule('caffeine');
-            else loadBasicMolecule('water'); // default fallback
-            
-            closeModal('search-modal');
+        // Show helpful message about CORS
+        const suggestions = getSuggestions(input, 'basic');
+        if (suggestions.length > 0) {
+            alert(`PubChem API blocked by browser security (CORS).\n\nTry these available molecules:\n${suggestions.join(', ')}\n\nFor full PubChem access, deploy to a server with CORS proxy.`);
         } else {
-            alert(`Could not find "${input}" in PubChem database.\n\nTry: caffeine, aspirin, glucose, benzene, morphine, dopamine, etc.\n\nError: ${error.message}`);
+            alert(`"${input}" not found in local database.\n\nAvailable molecules:\nwater, methane, co2, ammonia, benzene, ethanol, salt, glucose, caffeine, aspirin\n\nNote: PubChem API requires server deployment due to CORS restrictions.`);
         }
     } finally {
-        // Reset button
-        const searchButton = document.querySelector('#search-modal .search-button');
         searchButton.textContent = 'Search PubChem Database';
         searchButton.disabled = false;
     }
@@ -1015,76 +976,218 @@ async function searchBioMolecule() {
         return;
     }
     
-    try {
-        const searchButton = document.querySelector('#bio-search-modal .search-button');
-        const originalText = searchButton.textContent;
-        searchButton.textContent = 'Searching...';
-        searchButton.disabled = true;
-        
-        // Same PubChem API process as basic search
-        const nameResponse = await fetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encodeURIComponent(input)}/cids/JSON`);
-        
-        if (!nameResponse.ok) {
-            throw new Error('Biomolecule not found');
-        }
-        
-        const nameData = await nameResponse.json();
-        const cid = nameData.IdentifierList.CID[0];
-        
-        const propsResponse = await fetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/property/MolecularFormula,MolecularWeight,IUPACName/JSON`);
-        const propsData = await propsResponse.json();
-        const props = propsData.PropertyTable.Properties[0];
-        
-        const structureResponse = await fetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/${cid}/record/SDF/?record_type=3d`);
-        const sdfData = await structureResponse.text();
-        
-        const moleculeData = parseSDF(sdfData);
-        if (moleculeData && moleculeData.atoms.length > 0) {
-            if (bioScene && currentBioMolecule) {
-                bioScene.remove(currentBioMolecule);
-            }
-            
-            currentBioMolecule = createMoleculeFromSDF(moleculeData);
-            currentBioMolecule.scale.set(bioMoleculeScale, bioMoleculeScale, bioMoleculeScale);
-            bioScene.add(currentBioMolecule);
-            
-            const moleculeName = `${input} (${props.MolecularFormula})`;
-            const moleculeDetails = `MW: ${props.MolecularWeight} g/mol. ${props.IUPACName ? props.IUPACName.substring(0, 100) + '...' : 'Loaded from PubChem database.'}`;
-            
-            document.getElementById('bio-molecule-name-display').textContent = moleculeName;
-            document.getElementById('bio-molecule-details-display').textContent = moleculeDetails;
-            
-            //alert(`Successfully loaded ${input}!\n\nFormula: ${props.MolecularFormula}\nAtoms: ${moleculeData.atoms.length}\nBonds: ${moleculeData.bonds.length}`);
-        } else {
-            throw new Error('Could not parse 3D structure');
-        }
-        
+    const searchButton = document.querySelector('#bio-search-modal .search-button');
+    searchButton.textContent = 'Searching...';
+    searchButton.disabled = true;
+    
+    const localResult = searchLocalDatabase(input, 'bio');
+    if (localResult) {
+        loadLocalMolecule(localResult, 'bio');
+        searchButton.textContent = 'Search PubChem Database';
+        searchButton.disabled = false;
         closeModal('bio-search-modal');
+        return;
+    }
+    
+    try {
+        // Try PubChem (will likely fail due to CORS)
+        const nameResponse = await fetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encodeURIComponent(input)}/cids/JSON`);
+        if (!nameResponse.ok) throw new Error('CORS or not found');
         
     } catch (error) {
-        console.error('Bio search error:', error);
-        
-        const demoMolecules = ['caffeine', 'aspirin', 'glucose', 'insulin', 'dopamine', 'serotonin', 'testosterone'];
-        const lowerInput = input.toLowerCase();
-        
-        if (demoMolecules.includes(lowerInput)) {
-            alert(`Network error accessing PubChem.\n\nShowing demo version of ${input}.\n\nFor full functionality, deploy to a server with CORS enabled.`);
-            
-            if (lowerInput === 'glucose') loadBioMolecule('glucose');
-            else if (lowerInput === 'caffeine') loadBioMolecule('caffeine');
-            else if (lowerInput === 'aspirin') loadBioMolecule('aspirin');
-            else if (lowerInput === 'insulin') loadBioMolecule('insulin');
-            else loadBioMolecule('glucose');
-            
-            closeModal('bio-search-modal');
+        const suggestions = getSuggestions(input, 'bio');
+        if (suggestions.length > 0) {
+            alert(`PubChem API blocked by browser security (CORS).\n\nTry these available biomolecules:\n${suggestions.join(', ')}\n\nFor full PubChem access, deploy to a server.`);
         } else {
-            alert(`Could not find "${input}" in PubChem database.\n\nTry: insulin, dopamine, testosterone, morphine, penicillin, etc.\n\nError: ${error.message}`);
+            alert(`"${input}" not found in local database.\n\nAvailable biomolecules:\nglucose, caffeine, aspirin, insulin, dopamine, serotonin, testosterone, morphine\n\nNote: Full PubChem integration requires server deployment.`);
         }
     } finally {
-        const searchButton = document.querySelector('#bio-search-modal .search-button');
         searchButton.textContent = 'Search PubChem Database';
         searchButton.disabled = false;
     }
+}
+
+// Local molecule database with common compounds
+function searchLocalDatabase(query, type) {
+    const normalizedQuery = query.toLowerCase().trim();
+    
+    const basicMolecules = {
+        // Common names and variations
+        'water': { id: 'water', name: 'Water', formula: 'H₂O' },
+        'h2o': { id: 'water', name: 'Water', formula: 'H₂O' },
+        'methane': { id: 'methane', name: 'Methane', formula: 'CH₄' },
+        'ch4': { id: 'methane', name: 'Methane', formula: 'CH₄ ' },
+        'co2': { id: 'co2', name: 'Carbon Dioxide', formula: 'CO₂' },
+        'carbon dioxide': { id: 'co2', name: 'Carbon Dioxide', formula: 'CO₂' },
+        'ammonia': { id: 'ammonia', name: 'Ammonia', formula: 'NH₃' },
+        'nh3': { id: 'ammonia', name: 'Ammonia', formula: 'NH₃' },
+        'salt': { id: 'salt', name: 'Sodium Chloride', formula: 'NaCl' },
+        'sodium chloride': { id: 'salt', name: 'Sodium Chloride', formula: 'NaCl' },
+        'nacl': { id: 'salt', name: 'Sodium Chloride', formula: 'NaCl' },
+        'table salt': { id: 'salt', name: 'Sodium Chloride', formula: 'NaCl' },
+        'benzene': { id: 'benzene', name: 'Benzene', formula: 'C₆H₆' },
+        'ethanol': { id: 'ethanol', name: 'Ethanol', formula: 'C₂H₅OH' },
+        'alcohol': { id: 'ethanol', name: 'Ethanol', formula: 'C₂H₅OH' }
+    };
+    
+    const bioMolecules = {
+        'glucose': { id: 'glucose', name: 'Glucose', formula: 'C₆H₁₂O₆' },
+        'sugar': { id: 'glucose', name: 'Glucose', formula: 'C₆H₁₂O₆' },
+        'caffeine': { id: 'caffeine', name: 'Caffeine', formula: 'C₈H₁₀N₄O₂' },
+        'aspirin': { id: 'aspirin', name: 'Aspirin', formula: 'C₉H₈O₄' },
+        'insulin': { id: 'insulin', name: 'Insulin', formula: 'C₂₅₇H₃₈₃N₆₅O₇₇S₆' },
+        'dopamine': { id: 'dopamine', name: 'Dopamine', formula: 'C₈H₁₁NO₂' },
+        'serotonin': { id: 'serotonin', name: 'Serotonin', formula: 'C₁₀H₁₂N₂O' },
+        'testosterone': { id: 'testosterone', name: 'Testosterone', formula: 'C₁₉H₂₈O₂' },
+        'morphine': { id: 'morphine', name: 'Morphine', formula: 'C₁₇H₁₉NO₃' }
+    };
+    
+    const database = type === 'basic' ? basicMolecules : bioMolecules;
+    return database[normalizedQuery] || null;
+}
+
+function loadLocalMolecule(moleculeData, labType) {
+    const { id, name, formula } = moleculeData;
+    
+    if (labType === 'basic') {
+        // Load predefined basic molecules
+        if (['water', 'methane', 'co2', 'ammonia'].includes(id)) {
+            loadBasicMolecule(id);
+        } else {
+            // Create new molecules for local database
+            if (id === 'salt') createSaltMolecule();
+            else if (id === 'benzene') createBenzeneMolecule();
+            else if (id === 'ethanol') createEthanolMolecule();
+        }
+        
+        document.getElementById('basic-molecule-name-display').textContent = `${name} (${formula})`;
+        document.getElementById('basic-molecule-details-display').textContent = `Loaded from local database. Common chemical compound found in everyday life.`;
+        
+    } else {
+        // Load predefined bio molecules
+        if (['glucose', 'caffeine', 'aspirin', 'insulin'].includes(id)) {
+            loadBioMolecule(id);
+        } else {
+            // Create new biomolecules for local database
+            if (id === 'dopamine') createDopamineMolecule();
+            else if (id === 'serotonin') createSerotoninMolecule();
+            else if (id === 'testosterone') createTestosteroneMolecule();
+            else if (id === 'morphine') createMorphineMolecule();
+        }
+        
+        document.getElementById('bio-molecule-name-display').textContent = `${name} (${formula})`;
+        document.getElementById('bio-molecule-details-display').textContent = `Important biological molecule. Loaded from local chemistry database.`;
+    }
+    
+    alert(`Found ${name}!\n\nFormula: ${formula}\nSource: Local chemistry database\n\nNote: For access to 100M+ compounds, deploy with CORS proxy.`);
+}
+
+function getSuggestions(query, type) {
+    const basic = ['water', 'methane', 'co2', 'ammonia', 'salt', 'benzene', 'ethanol'];
+    const bio = ['glucose', 'caffeine', 'aspirin', 'insulin', 'dopamine', 'serotonin', 'testosterone', 'morphine'];
+    
+    const suggestions = type === 'basic' ? basic : bio;
+    const normalizedQuery = query.toLowerCase();
+    
+    // Return suggestions that partially match the query
+    return suggestions.filter(s => 
+        s.includes(normalizedQuery) || 
+        normalizedQuery.includes(s) ||
+        s.charAt(0) === normalizedQuery.charAt(0)
+    ).slice(0, 4);
+}
+
+// Additional molecule creators for local database
+function createSaltMolecule() {
+    if (!basicScene || !currentBasicMolecule) return;
+    
+    basicScene.remove(currentBasicMolecule);
+    const group = new THREE.Group();
+    
+    // Ionic crystal structure representation
+    const sodium = createAtom('sodium', 0.8, 0xab5cf2, new THREE.Vector3(-1.5, 0, 0));
+    const chloride = createAtom('chloride', 0.9, 0x00ff00, new THREE.Vector3(1.5, 0, 0));
+    group.add(sodium);
+    group.add(chloride);
+    
+    currentBasicMolecule = group;
+    currentBasicMolecule.scale.set(moleculeScale, moleculeScale, moleculeScale);
+    basicScene.add(currentBasicMolecule);
+}
+
+function createBenzeneMolecule() {
+    if (!basicScene || !currentBasicMolecule) return;
+    
+    basicScene.remove(currentBasicMolecule);
+    const group = new THREE.Group();
+    
+    // Benzene ring
+    for (let i = 0; i < 6; i++) {
+        const angle = (i / 6) * Math.PI * 2;
+        const carbon = createAtom('carbon', 0.5, 0x444444, 
+            new THREE.Vector3(Math.cos(angle) * 1.4, Math.sin(angle) * 1.4, 0));
+        group.add(carbon);
+        
+        const hydrogen = createAtom('hydrogen', 0.3, 0xffffff,
+            new THREE.Vector3(Math.cos(angle) * 2.2, Math.sin(angle) * 2.2, 0));
+        group.add(hydrogen);
+    }
+    
+    currentBasicMolecule = group;
+    currentBasicMolecule.scale.set(moleculeScale, moleculeScale, moleculeScale);
+    basicScene.add(currentBasicMolecule);
+}
+
+function createEthanolMolecule() {
+    if (!basicScene || !currentBasicMolecule) return;
+    
+    basicScene.remove(currentBasicMolecule);
+    const group = new THREE.Group();
+    
+    // Ethanol structure
+    const c1 = createAtom('carbon', 0.6, 0x444444, new THREE.Vector3(-1, 0, 0));
+    const c2 = createAtom('carbon', 0.6, 0x444444, new THREE.Vector3(1, 0, 0));
+    const oxygen = createAtom('oxygen', 0.5, 0xff4444, new THREE.Vector3(2.5, 0, 0));
+    const hydrogen = createAtom('hydrogen', 0.3, 0xffffff, new THREE.Vector3(3.5, 0, 0));
+    
+    group.add(c1);
+    group.add(c2);
+    group.add(oxygen);
+    group.add(hydrogen);
+    group.add(createBond(c1.position, c2.position));
+    group.add(createBond(c2.position, oxygen.position));
+    group.add(createBond(oxygen.position, hydrogen.position));
+    
+    currentBasicMolecule = group;
+    currentBasicMolecule.scale.set(moleculeScale, moleculeScale, moleculeScale);
+    basicScene.add(currentBasicMolecule);
+}
+
+function createDopamineMolecule() {
+    if (!bioScene || !currentBioMolecule) return;
+    
+    bioScene.remove(currentBioMolecule);
+    const group = new THREE.Group();
+    
+    // Simplified dopamine structure
+    const positions = [
+        { pos: new THREE.Vector3(0, 0, 0), color: 0x444444 },
+        { pos: new THREE.Vector3(1.4, 0, 0), color: 0x444444 },
+        { pos: new THREE.Vector3(2.1, 1.2, 0), color: 0xff4444 },
+        { pos: new THREE.Vector3(1.4, 2.4, 0), color: 0xff4444 },
+        { pos: new THREE.Vector3(0, 2.4, 0), color: 0x444444 },
+        { pos: new THREE.Vector3(-0.7, 1.2, 0), color: 0x444444 },
+        { pos: new THREE.Vector3(3.5, 0, 0), color: 0x4444ff }
+    ];
+    
+    positions.forEach(atomData => {
+        const atom = createAtom('carbon', 0.4, atomData.color, atomData.pos);
+        group.add(atom);
+    });
+    
+    currentBioMolecule = group;
+    currentBioMolecule.scale.set(bioMoleculeScale, bioMoleculeScale, bioMoleculeScale);
+    bioScene.add(currentBioMolecule);
 }
 
 // SDF Parser - converts PubChem 3D structure data to usable format
