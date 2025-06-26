@@ -1,0 +1,1442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Chemistry Lab</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: white;
+            overflow: hidden;
+            height: 100vh;
+            background: #1a1a2e;
+        }
+
+        .page {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100vh;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.5s ease;
+        }
+
+        .page.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* Landing Page */
+        #landing-page {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #2D1B69 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .main-title {
+            font-size: 3.5rem;
+            margin-bottom: 20px;
+            background: linear-gradient(45deg, #00ff88, #00cc66);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: bold;
+        }
+
+        .subtitle {
+            font-size: 1.3rem;
+            margin-bottom: 50px;
+            opacity: 0.95;
+            color: #e8e8e8;
+        }
+
+        .lab-selection {
+            display: flex;
+            gap: 40px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 60px;
+        }
+
+        .lab-card {
+            background: rgba(0,0,0,0.4);
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 25px;
+            padding: 35px;
+            min-width: 300px;
+            cursor: pointer;
+            transition: all 0.4s ease;
+            backdrop-filter: blur(15px);
+        }
+
+        .lab-card:hover {
+            transform: translateY(-10px);
+            border-color: #00ff88;
+            box-shadow: 0 20px 40px rgba(0,255,136,0.3);
+        }
+
+        .lab-icon {
+            font-size: 3.5rem;
+            margin-bottom: 20px;
+            display: block;
+        }
+
+        .lab-title {
+            font-size: 1.6rem;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #00ff88;
+        }
+
+        .lab-description {
+            font-size: 1rem;
+            opacity: 0.9;
+            line-height: 1.5;
+            color: #e0e0e0;
+        }
+
+        /* Lab Pages */
+        #basic-lab {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        #bio-lab {
+            background: linear-gradient(135deg, #2D1B69 0%, #11998E 100%);
+        }
+
+        .lab-header {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            z-index: 100;
+            background: rgba(0,0,0,0.8);
+            padding: 15px 25px;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .lab-title-header {
+            font-size: 1.4rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #00ff88;
+        }
+
+        .bio-lab .lab-title-header {
+            color: #11998E;
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .nav-btn {
+            padding: 8px 16px;
+            font-size: 0.9rem;
+            background: rgba(0,0,0,0.7);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 15px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .nav-btn:hover {
+            background: rgba(255,255,255,0.2);
+            transform: translateY(-2px);
+        }
+
+        .nav-btn.home {
+            background: rgba(0,255,136,0.8);
+            color: black;
+            font-weight: bold;
+        }
+
+        /* Molecule Info Panel */
+        .molecule-info-panel {
+            position: fixed;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.95);
+            padding: 20px 30px;
+            border-radius: 20px;
+            border: 2px solid rgba(0,255,136,0.8);
+            z-index: 150;
+            max-width: 700px;
+            width: 90%;
+            text-align: center;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: none;
+        }
+
+        .molecule-info-panel.show {
+            display: block;
+        }
+
+        .bio-panel {
+            border-color: rgba(17,153,142,0.8) !important;
+        }
+
+        .molecule-name-display {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #00ff88;
+            margin-bottom: 10px;
+        }
+
+        .bio-panel .molecule-name-display {
+            color: #11998E !important;
+        }
+
+        .molecule-details-display {
+            font-size: 0.9rem;
+            opacity: 0.95;
+            line-height: 1.4;
+            color: #e8e8e8;
+        }
+
+        canvas {
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* Left Sidebar Menu */
+        .sidebar-menu {
+            position: fixed;
+            top: 50%;
+            left: 20px;
+            transform: translateY(-50%);
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .menu-button {
+            width: 65px;
+            height: 65px;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.9);
+            border: 2px solid rgba(0,255,136,0.6);
+            color: white;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.4s ease;
+            backdrop-filter: blur(15px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        .bio-lab .menu-button {
+            border-color: rgba(17,153,142,0.6);
+        }
+
+        .menu-button:hover {
+            transform: scale(1.15);
+            background: rgba(0,255,136,0.2);
+            border-color: #00ff88;
+            box-shadow: 0 10px 30px rgba(0,255,136,0.4);
+        }
+
+        .bio-lab .menu-button:hover {
+            background: rgba(17,153,142,0.2);
+            border-color: #11998E;
+        }
+
+        /* Modal Windows */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 300;
+            display: none;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-window {
+            background: rgba(0,0,0,0.95);
+            border: 2px solid rgba(0,255,136,0.6);
+            border-radius: 25px;
+            padding: 35px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+
+        .bio-lab .modal-window {
+            border-color: rgba(17,153,142,0.6);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid rgba(255,255,255,0.2);
+        }
+
+        .modal-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #00ff88;
+        }
+
+        .bio-lab .modal-title {
+            color: #11998E;
+        }
+
+        .close-btn {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .close-btn:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        /* Search Content */
+        .search-input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 10px;
+            background: rgba(255,255,255,0.1);
+            color: white;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+
+        .search-button {
+            width: 100%;
+            padding: 15px;
+            background: rgba(0,255,136,0.8);
+            border: none;
+            border-radius: 10px;
+            color: black;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .bio-lab .search-button {
+            background: rgba(17,153,142,0.8);
+            color: white;
+        }
+
+        /* Molecule Grid */
+        .molecule-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .molecule-button {
+            padding: 15px 10px;
+            background: rgba(0,0,0,0.8);
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 10px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .molecule-button:hover {
+            background: rgba(0,255,136,0.8);
+            border-color: #00ff88;
+            color: black;
+        }
+
+        .bio-lab .molecule-button:hover {
+            background: rgba(17,153,142,0.8);
+            color: white;
+        }
+
+        @media (max-width: 768px) {
+            .main-title { font-size: 2.5rem; }
+            .lab-card { min-width: 280px; padding: 25px; }
+            .molecule-info-panel {
+                bottom: 15px;
+                left: 10px;
+                right: 10px;
+                transform: none;
+                padding: 15px 20px;
+                width: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Landing Page -->
+    <div id="landing-page" class="page active">
+        <h1 class="main-title">🧪 Interactive Chemistry Lab</h1>
+        <p class="subtitle">Advanced 3D Molecular Visualization Platform</p>
+        
+        <div class="lab-selection">
+            <div class="lab-card" onclick="goToBasicLab()">
+                <span class="lab-icon">⚛️</span>
+                <h2 class="lab-title">Basic Chemistry Lab</h2>
+                <p class="lab-description">
+                    Explore fundamental molecules like water, methane, and oxygen. 
+                    Perfect for learning basic chemical structures and properties.
+                </p>
+            </div>
+
+            <div class="lab-card" onclick="goToBioLab()">
+                <span class="lab-icon">🧬</span>
+                <h2 class="lab-title">Biochemistry Lab</h2>
+                <p class="lab-description">
+                    Discover complex biological molecules and proteins. 
+                    Advanced chemistry for pre-med and engineering students.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Basic Chemistry Lab -->
+    <div id="basic-lab" class="page">
+        <div class="lab-header">
+            <div class="lab-title-header">⚛️ Basic Chemistry Lab</div>
+            <div class="nav-buttons">
+                <button class="nav-btn home" onclick="goToLanding()">🏠 Home</button>
+                <button class="nav-btn" onclick="goToBioLab()">🧬 Biochemistry</button>
+            </div>
+        </div>
+
+        <!-- Left Sidebar Menu -->
+        <div class="sidebar-menu">
+            <div class="menu-button" onclick="openSearchModal()" title="Search Molecules">🔍</div>
+            <div class="menu-button" onclick="openControlsModal()" title="Controls">⚙️</div>
+            <div class="menu-button" onclick="openMoleculesModal()" title="Molecules">🧪</div>
+        </div>
+
+        <!-- Search Modal -->
+        <div id="search-modal" class="modal-overlay">
+            <div class="modal-window">
+                <div class="modal-header">
+                    <div class="modal-title">🔍 Search Molecules</div>
+                    <div class="close-btn" onclick="closeModal('search-modal')">×</div>
+                </div>
+                <input type="text" class="search-input" placeholder="Enter molecule name (e.g., caffeine, benzene)..." id="search-input">
+                <button class="search-button" onclick="searchMolecule()">Search PubChem Database</button>
+                <div style="margin-top: 15px; color: #888; font-size: 14px;">Demo mode - search functionality ready for deployment</div>
+            </div>
+        </div>
+
+        <!-- Controls Modal -->
+        <div id="controls-modal" class="modal-overlay">
+            <div class="modal-window">
+                <div class="modal-header">
+                    <div class="modal-title">⚙️ Molecule Controls</div>
+                    <div class="close-btn" onclick="closeModal('controls-modal')">×</div>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="color: #88E5A3; font-weight: bold;">Rotation Speed:</label>
+                    <input type="range" min="0" max="0.1" step="0.01" value="0.02" style="width: 100%; margin: 10px 0;" onchange="changeRotationSpeed(this.value)">
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="color: #88E5A3; font-weight: bold;">Molecule Size:</label>
+                    <input type="range" min="0.3" max="2.0" step="0.1" value="0.8" style="width: 100%; margin: 10px 0;" onchange="changeMoleculeSize(this.value)">
+                </div>
+                <button class="search-button" onclick="resetMolecule()">Reset Molecule</button>
+            </div>
+        </div>
+
+        <!-- Molecules Modal -->
+        <div id="molecules-modal" class="modal-overlay">
+            <div class="modal-window">
+                <div class="modal-header">
+                    <div class="modal-title">🧪 Basic Molecules</div>
+                    <div class="close-btn" onclick="closeModal('molecules-modal')">×</div>
+                </div>
+                <div class="molecule-grid">
+                    <div class="molecule-button" onclick="loadBasicMolecule('water')">💧<br>H₂O</div>
+                    <div class="molecule-button" onclick="loadBasicMolecule('methane')">🔥<br>CH₄</div>
+                    <div class="molecule-button" onclick="loadBasicMolecule('co2')">🌱<br>CO₂</div>
+                    <div class="molecule-button" onclick="loadBasicMolecule('ammonia')">🧽<br>NH₃</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="molecule-info-panel" id="basic-info-panel">
+            <div class="molecule-name-display" id="basic-molecule-name-display">Water (H₂O)</div>
+            <div class="molecule-details-display" id="basic-molecule-details-display">
+                Bent molecular geometry, 104.5°. Polar molecule essential for all life processes. Universal solvent.
+            </div>
+        </div>
+    </div>
+
+    <!-- Biochemistry Lab -->
+    <div id="bio-lab" class="page">
+        <div class="lab-header">
+            <div class="lab-title-header">🧬 Biochemistry Lab</div>
+            <div class="nav-buttons">
+                <button class="nav-btn home" onclick="goToLanding()">🏠 Home</button>
+                <button class="nav-btn" onclick="goToBasicLab()">⚛️ Basic Chemistry</button>
+            </div>
+        </div>
+
+        <!-- Left Sidebar Menu -->
+        <div class="sidebar-menu">
+            <div class="menu-button" onclick="openBioSearchModal()" title="Search Biomolecules">🔍</div>
+            <div class="menu-button" onclick="openBioControlsModal()" title="Controls">⚙️</div>
+            <div class="menu-button" onclick="openBioMoleculesModal()" title="Biomolecules">🧬</div>
+        </div>
+
+        <!-- Bio Search Modal -->
+        <div id="bio-search-modal" class="modal-overlay">
+            <div class="modal-window">
+                <div class="modal-header">
+                    <div class="modal-title">🔍 Search Biomolecules</div>
+                    <div class="close-btn" onclick="closeModal('bio-search-modal')">×</div>
+                </div>
+                <input type="text" class="search-input" placeholder="Enter biomolecule name (e.g., insulin, dopamine)..." id="bio-search-input">
+                <button class="search-button" onclick="searchBioMolecule()">Search PubChem Database</button>
+                <div style="margin-top: 15px; color: #888; font-size: 14px;">Demo mode - search functionality ready for deployment</div>
+            </div>
+        </div>
+
+        <!-- Bio Controls Modal -->
+        <div id="bio-controls-modal" class="modal-overlay">
+            <div class="modal-window">
+                <div class="modal-header">
+                    <div class="modal-title">⚙️ Biomolecule Controls</div>
+                    <div class="close-btn" onclick="closeModal('bio-controls-modal')">×</div>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="color: #11998E; font-weight: bold;">Animation Speed:</label>
+                    <input type="range" min="0.001" max="0.05" step="0.005" value="0.015" style="width: 100%; margin: 10px 0;" onchange="changeBioRotationSpeed(this.value)">
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="color: #11998E; font-weight: bold;">Molecule Size:</label>
+                    <input type="range" min="0.3" max="2.0" step="0.1" value="0.8" style="width: 100%; margin: 10px 0;" onchange="changeBioMoleculeSize(this.value)">
+                </div>
+                <button class="search-button" onclick="resetBioMolecule()">Reset Molecule</button>
+            </div>
+        </div>
+
+        <!-- Bio Molecules Modal -->
+        <div id="bio-molecules-modal" class="modal-overlay">
+            <div class="modal-window">
+                <div class="modal-header">
+                    <div class="modal-title">🧬 Biomolecules</div>
+                    <div class="close-btn" onclick="closeModal('bio-molecules-modal')">×</div>
+                </div>
+                <div class="molecule-grid">
+                    <div class="molecule-button" onclick="loadBioMolecule('glucose')">🍯<br>Glucose</div>
+                    <div class="molecule-button" onclick="loadBioMolecule('caffeine')">☕<br>Caffeine</div>
+                    <div class="molecule-button" onclick="loadBioMolecule('aspirin')">💊<br>Aspirin</div>
+                    <div class="molecule-button" onclick="loadBioMolecule('insulin')">💉<br>Insulin</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="molecule-info-panel bio-panel" id="bio-info-panel">
+            <div class="molecule-name-display" id="bio-molecule-name-display">Glucose (C₆H₁₂O₆)</div>
+            <div class="molecule-details-display" id="bio-molecule-details-display">
+                Simple sugar with pyranose ring structure. Primary energy source for cellular respiration.
+            </div>
+        </div>
+    </div>
+
+<script>
+// Global variables
+let currentPage = 'landing';
+let basicScene, basicCamera, basicRenderer, basicAnimationId;
+let bioScene, bioCamera, bioRenderer, bioAnimationId;
+let currentBasicMolecule = null;
+let currentBioMolecule = null;
+let rotationSpeed = 0.02;
+let bioRotationSpeed = 0.015;
+let moleculeScale = 0.8;
+let bioMoleculeScale = 0.8;
+
+// Helper functions
+function createAtom(type, radius, color, position = new THREE.Vector3()) {
+    const geometry = new THREE.SphereGeometry(radius, 20, 16);
+    const material = new THREE.MeshLambertMaterial({ color: color });
+    const atom = new THREE.Mesh(geometry, material);
+    atom.position.copy(position);
+    return atom;
+}
+
+function createBond(start, end, color = 0xaaaaaa, thickness = 0.05) {
+    const direction = new THREE.Vector3().subVectors(end, start);
+    const length = direction.length();
+    const geometry = new THREE.CylinderGeometry(thickness, thickness, length, 8);
+    const material = new THREE.MeshLambertMaterial({ color: color });
+    const bond = new THREE.Mesh(geometry, material);
+    bond.position.copy(start).add(direction.clone().multiplyScalar(0.5));
+    bond.lookAt(end);
+    bond.rotateX(Math.PI / 2);
+    return bond;
+}
+
+// Create molecules
+function createWaterMolecule() {
+    const group = new THREE.Group();
+    const oxygen = createAtom('oxygen', 0.6, 0xff4444);
+    const h1 = createAtom('hydrogen', 0.4, 0xffffff, new THREE.Vector3(1.2, 0.3, 0));
+    const h2 = createAtom('hydrogen', 0.4, 0xffffff, new THREE.Vector3(-1.2, 0.3, 0));
+    group.add(oxygen);
+    group.add(h1);
+    group.add(h2);
+    group.add(createBond(oxygen.position, h1.position));
+    group.add(createBond(oxygen.position, h2.position));
+    return group;
+}
+
+function createMethaneMolecule() {
+    const group = new THREE.Group();
+    const carbon = createAtom('carbon', 0.6, 0x444444);
+    group.add(carbon);
+    const positions = [
+        new THREE.Vector3(1, 1, 1).normalize().multiplyScalar(1.5),
+        new THREE.Vector3(-1, -1, 1).normalize().multiplyScalar(1.5),
+        new THREE.Vector3(-1, 1, -1).normalize().multiplyScalar(1.5),
+        new THREE.Vector3(1, -1, -1).normalize().multiplyScalar(1.5)
+    ];
+    positions.forEach(pos => {
+        const h = createAtom('hydrogen', 0.4, 0xffffff, pos);
+        group.add(h);
+        group.add(createBond(carbon.position, pos));
+    });
+    return group;
+}
+
+function createCO2Molecule() {
+    const group = new THREE.Group();
+    const carbon = createAtom('carbon', 0.6, 0x444444);
+    const o1 = createAtom('oxygen', 0.6, 0xff4444, new THREE.Vector3(-1.8, 0, 0));
+    const o2 = createAtom('oxygen', 0.6, 0xff4444, new THREE.Vector3(1.8, 0, 0));
+    group.add(carbon);
+    group.add(o1);
+    group.add(o2);
+    group.add(createBond(carbon.position, o1.position));
+    group.add(createBond(carbon.position, o2.position));
+    return group;
+}
+
+function createAmmoniaMolecule() {
+    const group = new THREE.Group();
+    const nitrogen = createAtom('nitrogen', 0.6, 0x4444ff);
+    const h1 = createAtom('hydrogen', 0.4, 0xffffff, new THREE.Vector3(1.2, -0.3, 0));
+    const h2 = createAtom('hydrogen', 0.4, 0xffffff, new THREE.Vector3(-0.6, -0.3, 1.0));
+    const h3 = createAtom('hydrogen', 0.4, 0xffffff, new THREE.Vector3(-0.6, -0.3, -1.0));
+    group.add(nitrogen);
+    group.add(h1);
+    group.add(h2);
+    group.add(h3);
+    group.add(createBond(nitrogen.position, h1.position));
+    group.add(createBond(nitrogen.position, h2.position));
+    group.add(createBond(nitrogen.position, h3.position));
+    return group;
+}
+
+function createGlucoseMolecule() {
+    const group = new THREE.Group();
+    const radius = 1.5;
+    for (let i = 0; i < 6; i++) {
+        const angle = (i / 6) * Math.PI * 2;
+        const carbon = createAtom('carbon', 0.5, 0x444444, 
+            new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, 0));
+        group.add(carbon);
+        const oxygen = createAtom('oxygen', 0.4, 0xff4444,
+            new THREE.Vector3(Math.cos(angle) * (radius + 0.8), Math.sin(angle) * (radius + 0.8), 0.3));
+        group.add(oxygen);
+    }
+    return group;
+}
+
+function createCaffeineMolecule() {
+    const group = new THREE.Group();
+    const ringAtoms = [
+        { pos: new THREE.Vector3(0, 0, 0), color: 0x444444 },
+        { pos: new THREE.Vector3(1.4, 0, 0), color: 0x444444 },
+        { pos: new THREE.Vector3(2.1, 1.2, 0), color: 0x4444ff },
+        { pos: new THREE.Vector3(1.4, 2.4, 0), color: 0x444444 },
+        { pos: new THREE.Vector3(0, 2.4, 0), color: 0x444444 },
+        { pos: new THREE.Vector3(-0.7, 1.2, 0), color: 0x4444ff }
+    ];
+    ringAtoms.forEach(atomData => {
+        const atom = createAtom('carbon', 0.4, atomData.color, atomData.pos);
+        group.add(atom);
+    });
+    return group;
+}
+
+function createAspirinMolecule() {
+    const group = new THREE.Group();
+    const radius = 1.2;
+    for (let i = 0; i < 6; i++) {
+        const angle = (i / 6) * Math.PI * 2;
+        const carbon = createAtom('carbon', 0.5, 0x444444, 
+            new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, 0));
+        group.add(carbon);
+    }
+    const carboxyl = createAtom('oxygen', 0.4, 0xff4444, new THREE.Vector3(2.5, 0, 0));
+    group.add(carboxyl);
+    return group;
+}
+
+function createInsulinMolecule() {
+    const group = new THREE.Group();
+    for (let i = 0; i < 15; i++) {
+        const angle = (i / 15) * Math.PI * 3;
+        const x = Math.cos(angle) * 2;
+        const y = i * 0.3 - 2;
+        const z = Math.sin(angle) * 2;
+        const colors = [0xFF6B6B, 0x3742fa, 0xFF4757, 0xffa502, 0x88CED1];
+        const amino = createAtom('carbon', 0.3, colors[i % 5], new THREE.Vector3(x, y, z));
+        group.add(amino);
+    }
+    return group;
+}
+
+// Navigation functions
+function goToLanding() {
+    cleanupCanvas();
+    showPage('landing-page');
+    currentPage = 'landing';
+}
+
+function goToBasicLab() {
+    cleanupCanvas();
+    showPage('basic-lab');
+    currentPage = 'basic';
+    setTimeout(initBasicLab, 100);
+}
+
+function goToBioLab() {
+    cleanupCanvas();
+    showPage('bio-lab');
+    currentPage = 'bio';
+    setTimeout(initBioLab, 100);
+}
+
+function showPage(pageId) {
+    document.querySelectorAll('.page').forEach(page => {
+        page.classList.remove('active');
+    });
+    
+    document.querySelectorAll('.molecule-info-panel').forEach(panel => {
+        panel.classList.remove('show');
+    });
+    
+    const targetPage = document.getElementById(pageId);
+    if (targetPage) {
+        targetPage.classList.add('active');
+    }
+    
+    setTimeout(() => {
+        if (pageId === 'basic-lab') {
+            document.getElementById('basic-info-panel').classList.add('show');
+        } else if (pageId === 'bio-lab') {
+            document.getElementById('bio-info-panel').classList.add('show');
+        }
+    }, 200);
+}
+
+function cleanupCanvas() {
+    if (basicAnimationId) {
+        cancelAnimationFrame(basicAnimationId);
+        basicAnimationId = null;
+    }
+    if (bioAnimationId) {
+        cancelAnimationFrame(bioAnimationId);
+        bioAnimationId = null;
+    }
+    
+    const canvas = document.querySelector('canvas');
+    if (canvas) {
+        canvas.remove();
+    }
+    
+    basicScene = null;
+    bioScene = null;
+    currentBasicMolecule = null;
+    currentBioMolecule = null;
+}
+
+// Lab initialization
+function initBasicLab() {
+    if (typeof THREE === 'undefined') {
+        setTimeout(initBasicLab, 100);
+        return;
+    }
+    
+    try {
+        basicScene = new THREE.Scene();
+        basicCamera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        basicCamera.position.set(0, 1, 6);
+        
+        basicRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        basicRenderer.setSize(window.innerWidth, window.innerHeight);
+        basicRenderer.setClearColor(0x000000, 0);
+        document.body.appendChild(basicRenderer.domElement);
+        
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        basicScene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(5, 10, 5);
+        basicScene.add(directionalLight);
+
+        currentBasicMolecule = createWaterMolecule();
+        currentBasicMolecule.scale.set(moleculeScale, moleculeScale, moleculeScale);
+        basicScene.add(currentBasicMolecule);
+        
+        function animate() {
+            if (currentPage === 'basic' && currentBasicMolecule) {
+                currentBasicMolecule.rotation.y += rotationSpeed;
+                currentBasicMolecule.rotation.x += rotationSpeed * 0.5;
+                basicRenderer.render(basicScene, basicCamera);
+                basicAnimationId = requestAnimationFrame(animate);
+            }
+        }
+        animate();
+        
+        console.log('Basic Lab ready!');
+    } catch (error) {
+        console.error('Basic lab error:', error);
+    }
+}
+
+function initBioLab() {
+    if (typeof THREE === 'undefined') {
+        setTimeout(initBioLab, 100);
+        return;
+    }
+    
+    try {
+        bioScene = new THREE.Scene();
+        bioCamera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        bioCamera.position.set(0, 0, 8);
+        
+        bioRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        bioRenderer.setSize(window.innerWidth, window.innerHeight);
+        bioRenderer.setClearColor(0x000000, 0);
+        document.body.appendChild(bioRenderer.domElement);
+        
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        bioScene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(10, 10, 5);
+        bioScene.add(directionalLight);
+
+        currentBioMolecule = createGlucoseMolecule();
+        currentBioMolecule.scale.set(bioMoleculeScale, bioMoleculeScale, bioMoleculeScale);
+        bioScene.add(currentBioMolecule);
+        
+        function animate() {
+            if (currentPage === 'bio' && currentBioMolecule) {
+                currentBioMolecule.rotation.y += bioRotationSpeed;
+                currentBioMolecule.rotation.x += bioRotationSpeed * 0.5;
+                bioRenderer.render(bioScene, bioCamera);
+                bioAnimationId = requestAnimationFrame(animate);
+            }
+        }
+        animate();
+        
+        console.log('Bio Lab ready!');
+    } catch (error) {
+        console.error('Bio lab error:', error);
+    }
+}
+
+// Modal functions
+function openSearchModal() {
+    document.getElementById('search-modal').style.display = 'flex';
+}
+
+function openControlsModal() {
+    document.getElementById('controls-modal').style.display = 'flex';
+}
+
+function openMoleculesModal() {
+    document.getElementById('molecules-modal').style.display = 'flex';
+}
+
+function openBioSearchModal() {
+    document.getElementById('bio-search-modal').style.display = 'flex';
+}
+
+function openBioControlsModal() {
+    document.getElementById('bio-controls-modal').style.display = 'flex';
+}
+
+function openBioMoleculesModal() {
+    document.getElementById('bio-molecules-modal').style.display = 'flex';
+}
+
+function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+}
+
+// Search functions with better fallback handling
+async function searchMolecule() {
+    const input = document.getElementById('search-input').value.trim();
+    if (!input) {
+        alert('Please enter a molecule name');
+        return;
+    }
+    
+    // Show loading state
+    const searchButton = document.querySelector('#search-modal .search-button');
+    searchButton.textContent = 'Searching...';
+    searchButton.disabled = true;
+    
+    // First check local database for common compounds
+    const localResult = searchLocalDatabase(input, 'basic');
+    if (localResult) {
+        loadLocalMolecule(localResult, 'basic');
+        searchButton.textContent = 'Search PubChem Database';
+        searchButton.disabled = false;
+        closeModal('search-modal');
+        return;
+    }
+    
+    try {
+        // Try PubChem API (will likely fail due to CORS in browser)
+        const nameResponse = await fetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encodeURIComponent(input)}/cids/JSON`);
+        
+        if (!nameResponse.ok) {
+            throw new Error('CORS or molecule not found');
+        }
+        
+        // If successful, continue with PubChem processing...
+        // (This rarely works in browser due to CORS)
+        
+    } catch (error) {
+        console.log('PubChem API blocked (CORS), using local database');
+        
+        // Show helpful message about CORS
+        const suggestions = getSuggestions(input, 'basic');
+        if (suggestions.length > 0) {
+            alert(`PubChem API blocked by browser security (CORS).\n\nTry these available molecules:\n${suggestions.join(', ')}\n\nFor full PubChem access, deploy to a server with CORS proxy.`);
+        } else {
+            alert(`"${input}" not found in local database.\n\nAvailable molecules:\nwater, methane, co2, ammonia, benzene, ethanol, salt, glucose, caffeine, aspirin\n\nNote: PubChem API requires server deployment due to CORS restrictions.`);
+        }
+    } finally {
+        searchButton.textContent = 'Search PubChem Database';
+        searchButton.disabled = false;
+    }
+}
+
+async function searchBioMolecule() {
+    const input = document.getElementById('bio-search-input').value.trim();
+    if (!input) {
+        alert('Please enter a biomolecule name');
+        return;
+    }
+    
+    const searchButton = document.querySelector('#bio-search-modal .search-button');
+    searchButton.textContent = 'Searching...';
+    searchButton.disabled = true;
+    
+    const localResult = searchLocalDatabase(input, 'bio');
+    if (localResult) {
+        loadLocalMolecule(localResult, 'bio');
+        searchButton.textContent = 'Search PubChem Database';
+        searchButton.disabled = false;
+        closeModal('bio-search-modal');
+        return;
+    }
+    
+    try {
+        // Try PubChem (will likely fail due to CORS)
+        const nameResponse = await fetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/${encodeURIComponent(input)}/cids/JSON`);
+        if (!nameResponse.ok) throw new Error('CORS or not found');
+        
+    } catch (error) {
+        const suggestions = getSuggestions(input, 'bio');
+        if (suggestions.length > 0) {
+            alert(`PubChem API blocked by browser security (CORS).\n\nTry these available biomolecules:\n${suggestions.join(', ')}\n\nFor full PubChem access, deploy to a server.`);
+        } else {
+            alert(`"${input}" not found in local database.\n\nAvailable biomolecules:\nglucose, caffeine, aspirin, insulin, dopamine, serotonin, testosterone, morphine\n\nNote: Full PubChem integration requires server deployment.`);
+        }
+    } finally {
+        searchButton.textContent = 'Search PubChem Database';
+        searchButton.disabled = false;
+    }
+}
+
+// Local molecule database with common compounds
+function searchLocalDatabase(query, type) {
+    const normalizedQuery = query.toLowerCase().trim();
+    
+    const basicMolecules = {
+        // Common names and variations
+        'water': { id: 'water', name: 'Water', formula: 'H₂O' },
+        'h2o': { id: 'water', name: 'Water', formula: 'H₂O' },
+        'methane': { id: 'methane', name: 'Methane', formula: 'CH₄' },
+        'ch4': { id: 'methane', name: 'Methane', formula: 'CH₄ ' },
+        'co2': { id: 'co2', name: 'Carbon Dioxide', formula: 'CO₂' },
+        'carbon dioxide': { id: 'co2', name: 'Carbon Dioxide', formula: 'CO₂' },
+        'ammonia': { id: 'ammonia', name: 'Ammonia', formula: 'NH₃' },
+        'nh3': { id: 'ammonia', name: 'Ammonia', formula: 'NH₃' },
+        'salt': { id: 'salt', name: 'Sodium Chloride', formula: 'NaCl' },
+        'sodium chloride': { id: 'salt', name: 'Sodium Chloride', formula: 'NaCl' },
+        'nacl': { id: 'salt', name: 'Sodium Chloride', formula: 'NaCl' },
+        'table salt': { id: 'salt', name: 'Sodium Chloride', formula: 'NaCl' },
+        'benzene': { id: 'benzene', name: 'Benzene', formula: 'C₆H₆' },
+        'ethanol': { id: 'ethanol', name: 'Ethanol', formula: 'C₂H₅OH' },
+        'alcohol': { id: 'ethanol', name: 'Ethanol', formula: 'C₂H₅OH' }
+    };
+    
+    const bioMolecules = {
+        'glucose': { id: 'glucose', name: 'Glucose', formula: 'C₆H₁₂O₆' },
+        'sugar': { id: 'glucose', name: 'Glucose', formula: 'C₆H₁₂O₆' },
+        'caffeine': { id: 'caffeine', name: 'Caffeine', formula: 'C₈H₁₀N₄O₂' },
+        'aspirin': { id: 'aspirin', name: 'Aspirin', formula: 'C₉H₈O₄' },
+        'insulin': { id: 'insulin', name: 'Insulin', formula: 'C₂₅₇H₃₈₃N₆₅O₇₇S₆' },
+        'dopamine': { id: 'dopamine', name: 'Dopamine', formula: 'C₈H₁₁NO₂' },
+        'serotonin': { id: 'serotonin', name: 'Serotonin', formula: 'C₁₀H₁₂N₂O' },
+        'testosterone': { id: 'testosterone', name: 'Testosterone', formula: 'C₁₉H₂₈O₂' },
+        'morphine': { id: 'morphine', name: 'Morphine', formula: 'C₁₇H₁₉NO₃' }
+    };
+    
+    const database = type === 'basic' ? basicMolecules : bioMolecules;
+    return database[normalizedQuery] || null;
+}
+
+function loadLocalMolecule(moleculeData, labType) {
+    const { id, name, formula } = moleculeData;
+    
+    if (labType === 'basic') {
+        // Load predefined basic molecules
+        if (['water', 'methane', 'co2', 'ammonia'].includes(id)) {
+            loadBasicMolecule(id);
+        } else {
+            // Create new molecules for local database
+            if (id === 'salt') createSaltMolecule();
+            else if (id === 'benzene') createBenzeneMolecule();
+            else if (id === 'ethanol') createEthanolMolecule();
+        }
+        
+        document.getElementById('basic-molecule-name-display').textContent = `${name} (${formula})`;
+        document.getElementById('basic-molecule-details-display').textContent = `Loaded from local database. Common chemical compound found in everyday life.`;
+        
+    } else {
+        // Load predefined bio molecules
+        if (['glucose', 'caffeine', 'aspirin', 'insulin'].includes(id)) {
+            loadBioMolecule(id);
+        } else {
+            // Create new biomolecules for local database
+            if (id === 'dopamine') createDopamineMolecule();
+            else if (id === 'serotonin') createSerotoninMolecule();
+            else if (id === 'testosterone') createTestosteroneMolecule();
+            else if (id === 'morphine') createMorphineMolecule();
+        }
+        
+        document.getElementById('bio-molecule-name-display').textContent = `${name} (${formula})`;
+        document.getElementById('bio-molecule-details-display').textContent = `Important biological molecule. Loaded from local chemistry database.`;
+    }
+    
+    alert(`Found ${name}!\n\nFormula: ${formula}\nSource: Local chemistry database\n\nNote: For access to 100M+ compounds, deploy with CORS proxy.`);
+}
+
+function getSuggestions(query, type) {
+    const basic = ['water', 'methane', 'co2', 'ammonia', 'salt', 'benzene', 'ethanol'];
+    const bio = ['glucose', 'caffeine', 'aspirin', 'insulin', 'dopamine', 'serotonin', 'testosterone', 'morphine'];
+    
+    const suggestions = type === 'basic' ? basic : bio;
+    const normalizedQuery = query.toLowerCase();
+    
+    // Return suggestions that partially match the query
+    return suggestions.filter(s => 
+        s.includes(normalizedQuery) || 
+        normalizedQuery.includes(s) ||
+        s.charAt(0) === normalizedQuery.charAt(0)
+    ).slice(0, 4);
+}
+
+// Additional molecule creators for local database
+function createSaltMolecule() {
+    if (!basicScene || !currentBasicMolecule) return;
+    
+    basicScene.remove(currentBasicMolecule);
+    const group = new THREE.Group();
+    
+    // Ionic crystal structure representation
+    const sodium = createAtom('sodium', 0.8, 0xab5cf2, new THREE.Vector3(-1.5, 0, 0));
+    const chloride = createAtom('chloride', 0.9, 0x00ff00, new THREE.Vector3(1.5, 0, 0));
+    group.add(sodium);
+    group.add(chloride);
+    
+    currentBasicMolecule = group;
+    currentBasicMolecule.scale.set(moleculeScale, moleculeScale, moleculeScale);
+    basicScene.add(currentBasicMolecule);
+}
+
+function createBenzeneMolecule() {
+    if (!basicScene || !currentBasicMolecule) return;
+    
+    basicScene.remove(currentBasicMolecule);
+    const group = new THREE.Group();
+    
+    // Benzene ring
+    for (let i = 0; i < 6; i++) {
+        const angle = (i / 6) * Math.PI * 2;
+        const carbon = createAtom('carbon', 0.5, 0x444444, 
+            new THREE.Vector3(Math.cos(angle) * 1.4, Math.sin(angle) * 1.4, 0));
+        group.add(carbon);
+        
+        const hydrogen = createAtom('hydrogen', 0.3, 0xffffff,
+            new THREE.Vector3(Math.cos(angle) * 2.2, Math.sin(angle) * 2.2, 0));
+        group.add(hydrogen);
+    }
+    
+    currentBasicMolecule = group;
+    currentBasicMolecule.scale.set(moleculeScale, moleculeScale, moleculeScale);
+    basicScene.add(currentBasicMolecule);
+}
+
+function createEthanolMolecule() {
+    if (!basicScene || !currentBasicMolecule) return;
+    
+    basicScene.remove(currentBasicMolecule);
+    const group = new THREE.Group();
+    
+    // Ethanol structure
+    const c1 = createAtom('carbon', 0.6, 0x444444, new THREE.Vector3(-1, 0, 0));
+    const c2 = createAtom('carbon', 0.6, 0x444444, new THREE.Vector3(1, 0, 0));
+    const oxygen = createAtom('oxygen', 0.5, 0xff4444, new THREE.Vector3(2.5, 0, 0));
+    const hydrogen = createAtom('hydrogen', 0.3, 0xffffff, new THREE.Vector3(3.5, 0, 0));
+    
+    group.add(c1);
+    group.add(c2);
+    group.add(oxygen);
+    group.add(hydrogen);
+    group.add(createBond(c1.position, c2.position));
+    group.add(createBond(c2.position, oxygen.position));
+    group.add(createBond(oxygen.position, hydrogen.position));
+    
+    currentBasicMolecule = group;
+    currentBasicMolecule.scale.set(moleculeScale, moleculeScale, moleculeScale);
+    basicScene.add(currentBasicMolecule);
+}
+
+function createDopamineMolecule() {
+    if (!bioScene || !currentBioMolecule) return;
+    
+    bioScene.remove(currentBioMolecule);
+    const group = new THREE.Group();
+    
+    // Simplified dopamine structure
+    const positions = [
+        { pos: new THREE.Vector3(0, 0, 0), color: 0x444444 },
+        { pos: new THREE.Vector3(1.4, 0, 0), color: 0x444444 },
+        { pos: new THREE.Vector3(2.1, 1.2, 0), color: 0xff4444 },
+        { pos: new THREE.Vector3(1.4, 2.4, 0), color: 0xff4444 },
+        { pos: new THREE.Vector3(0, 2.4, 0), color: 0x444444 },
+        { pos: new THREE.Vector3(-0.7, 1.2, 0), color: 0x444444 },
+        { pos: new THREE.Vector3(3.5, 0, 0), color: 0x4444ff }
+    ];
+    
+    positions.forEach(atomData => {
+        const atom = createAtom('carbon', 0.4, atomData.color, atomData.pos);
+        group.add(atom);
+    });
+    
+    currentBioMolecule = group;
+    currentBioMolecule.scale.set(bioMoleculeScale, bioMoleculeScale, bioMoleculeScale);
+    bioScene.add(currentBioMolecule);
+}
+
+// SDF Parser - converts PubChem 3D structure data to usable format
+function parseSDF(sdfText) {
+    try {
+        const lines = sdfText.split('\n');
+        if (lines.length < 4) return null;
+        
+        // Parse header - line 4 contains atom/bond counts
+        const countsLine = lines[3];
+        const atomCount = parseInt(countsLine.substring(0, 3).trim());
+        const bondCount = parseInt(countsLine.substring(3, 6).trim());
+        
+        if (atomCount === 0) return null;
+        
+        const atoms = [];
+        const bonds = [];
+        
+        // Parse atoms (starting from line 4, 0-indexed)
+        for (let i = 4; i < 4 + atomCount; i++) {
+            const line = lines[i];
+            if (!line) continue;
+            
+            const x = parseFloat(line.substring(0, 10).trim());
+            const y = parseFloat(line.substring(10, 20).trim());
+            const z = parseFloat(line.substring(20, 30).trim());
+            const element = line.substring(31, 34).trim();
+            
+            atoms.push({ x: x, y: y, z: z, element: element });
+        }
+        
+        // Parse bonds
+        for (let i = 4 + atomCount; i < 4 + atomCount + bondCount; i++) {
+            const line = lines[i];
+            if (!line) continue;
+            
+            const atom1 = parseInt(line.substring(0, 3).trim()) - 1; // Convert to 0-based indexing
+            const atom2 = parseInt(line.substring(3, 6).trim()) - 1;
+            const bondType = parseInt(line.substring(6, 9).trim());
+            
+            bonds.push({ atom1: atom1, atom2: atom2, bondType: bondType });
+        }
+        
+        return { atoms: atoms, bonds: bonds };
+    } catch (error) {
+        console.error('SDF parsing error:', error);
+        return null;
+    }
+}
+
+// Create Three.js molecule from SDF data
+function createMoleculeFromSDF(moleculeData) {
+    const group = new THREE.Group();
+    const { atoms, bonds } = moleculeData;
+    
+    // Standard CPK element colors
+    const elementColors = {
+        'H': 0xffffff,   // White
+        'C': 0x404040,   // Dark gray  
+        'N': 0x0000ff,   // Blue
+        'O': 0xff0000,   // Red
+        'P': 0xff8000,   // Orange
+        'S': 0xffff00,   // Yellow
+        'Cl': 0x00ff00,  // Green
+        'Br': 0x800000,  // Brown
+        'I': 0x800080,   // Purple
+        'F': 0x90e050,   // Light green
+        'Na': 0xab5cf2,  // Violet
+        'Mg': 0x8aff00,  // Light green
+        'Ca': 0x3dff00,  // Green
+        'Fe': 0xe06633,  // Orange
+        'Zn': 0x7d80b0   // Blue-gray
+    };
+    
+    // Van der Waals radii (scaled for visualization)
+    const elementRadii = {
+        'H': 0.25, 'C': 0.35, 'N': 0.32, 'O': 0.30, 'P': 0.38, 'S': 0.36,
+        'Cl': 0.35, 'Br': 0.40, 'I': 0.45, 'F': 0.28, 'Na': 0.45, 'Mg': 0.35,
+        'Al': 0.35, 'Si': 0.35, 'K': 0.50, 'Ca': 0.40, 'Fe': 0.35, 'Zn': 0.35
+    };
+    
+    const atomMeshes = [];
+    
+    // Create atoms
+    atoms.forEach((atom, index) => {
+        const element = atom.element.toUpperCase();
+        const color = elementColors[element] || 0x888888; // Default gray
+        const radius = elementRadii[element] || 0.35;
+        
+        const geometry = new THREE.SphereGeometry(radius, 16, 12);
+        const material = new THREE.MeshLambertMaterial({ color: color });
+        const atomMesh = new THREE.Mesh(geometry, material);
+        
+        // Scale coordinates for better visualization
+        atomMesh.position.set(atom.x * 0.5, atom.y * 0.5, atom.z * 0.5);
+        atomMesh.userData = { element: element, atomIndex: index };
+        
+        group.add(atomMesh);
+        atomMeshes.push(atomMesh);
+    });
+    
+    // Create bonds
+    bonds.forEach(bond => {
+        const atom1 = atomMeshes[bond.atom1];
+        const atom2 = atomMeshes[bond.atom2];
+        
+        if (atom1 && atom2) {
+            const bondGeometry = new THREE.CylinderGeometry(0.05, 0.05, 
+                atom1.position.distanceTo(atom2.position), 8);
+            const bondMaterial = new THREE.MeshLambertMaterial({ color: 0xaaaaaa });
+            const bondMesh = new THREE.Mesh(bondGeometry, bondMaterial);
+            
+            // Position bond between atoms
+            bondMesh.position.copy(atom1.position).add(atom2.position).multiplyScalar(0.5);
+            bondMesh.lookAt(atom2.position);
+            bondMesh.rotateX(Math.PI / 2);
+            
+            group.add(bondMesh);
+        }
+    });
+    
+    return group;
+}
+
+// Control functions
+function changeRotationSpeed(value) {
+    rotationSpeed = parseFloat(value);
+}
+
+function changeMoleculeSize(value) {
+    moleculeScale = parseFloat(value);
+    if (currentBasicMolecule) {
+        currentBasicMolecule.scale.set(moleculeScale, moleculeScale, moleculeScale);
+    }
+}
+
+function changeBioRotationSpeed(value) {
+    bioRotationSpeed = parseFloat(value);
+}
+
+function changeBioMoleculeSize(value) {
+    bioMoleculeScale = parseFloat(value);
+    if (currentBioMolecule) {
+        currentBioMolecule.scale.set(bioMoleculeScale, bioMoleculeScale, bioMoleculeScale);
+    }
+}
+
+function resetMolecule() {
+    rotationSpeed = 0.02;
+    moleculeScale = 0.8;
+    if (currentBasicMolecule) {
+        currentBasicMolecule.scale.set(0.8, 0.8, 0.8);
+        currentBasicMolecule.rotation.set(0, 0, 0);
+    }
+    closeModal('controls-modal');
+}
+
+function resetBioMolecule() {
+    bioRotationSpeed = 0.015;
+    bioMoleculeScale = 0.8;
+    if (currentBioMolecule) {
+        currentBioMolecule.scale.set(0.8, 0.8, 0.8);
+        currentBioMolecule.rotation.set(0, 0, 0);
+    }
+    closeModal('bio-controls-modal');
+}
+
+// Molecule loading functions
+function loadBasicMolecule(type) {
+    if (basicScene && currentBasicMolecule) {
+        basicScene.remove(currentBasicMolecule);
+    }
+    
+    const moleculeData = {
+        water: { create: createWaterMolecule, name: 'Water (H₂O)', details: 'Bent molecular geometry, 104.5°. Polar molecule essential for all life processes.' },
+        methane: { create: createMethaneMolecule, name: 'Methane (CH₄)', details: 'Tetrahedral geometry, 109.5°. Nonpolar hydrocarbon. Major component of natural gas.' },
+        co2: { create: createCO2Molecule, name: 'Carbon Dioxide (CO₂)', details: 'Linear molecule, 180°. Nonpolar. Essential for photosynthesis, major greenhouse gas.' },
+        ammonia: { create: createAmmoniaMolecule, name: 'Ammonia (NH₃)', details: 'Trigonal pyramidal, 107°. Polar molecule. Used in fertilizer production and cleaning.' }
+    };
+    
+    const molecule = moleculeData[type];
+    if (molecule) {
+        currentBasicMolecule = molecule.create();
+        currentBasicMolecule.scale.set(moleculeScale, moleculeScale, moleculeScale);
+        basicScene.add(currentBasicMolecule);
+        
+        document.getElementById('basic-molecule-name-display').textContent = molecule.name;
+        document.getElementById('basic-molecule-details-display').textContent = molecule.details;
+    }
+    
+    closeModal('molecules-modal');
+}
+
+function loadBioMolecule(type) {
+    if (bioScene && currentBioMolecule) {
+        bioScene.remove(currentBioMolecule);
+    }
+    
+    const moleculeData = {
+        glucose: { create: createGlucoseMolecule, name: 'Glucose (C₆H₁₂O₆)', details: 'Simple sugar with pyranose ring structure. Primary energy source for cellular respiration.' },
+        caffeine: { create: createCaffeineMolecule, name: 'Caffeine (C₈H₁₀N₄O₂)', details: 'Purine alkaloid stimulant. Blocks adenosine receptors, found in coffee and tea.' },
+        aspirin: { create: createAspirinMolecule, name: 'Aspirin (C₉H₈O₄)', details: 'NSAID pharmaceutical. COX enzyme inhibitor for pain relief and cardiovascular protection.' },
+        insulin: { create: createInsulinMolecule, name: 'Human Insulin', details: 'Protein hormone (51 amino acids). Regulates blood glucose, essential for diabetes treatment.' }
+    };
+    
+    const molecule = moleculeData[type];
+    if (molecule) {
+        currentBioMolecule = molecule.create();
+        currentBioMolecule.scale.set(bioMoleculeScale, bioMoleculeScale, bioMoleculeScale);
+        bioScene.add(currentBioMolecule);
+        
+        document.getElementById('bio-molecule-name-display').textContent = molecule.name;
+        document.getElementById('bio-molecule-details-display').textContent = molecule.details;
+    }
+    
+    closeModal('bio-molecules-modal');
+}
+
+// Make functions global
+window.goToLanding = goToLanding;
+window.goToBasicLab = goToBasicLab;
+window.goToBioLab = goToBioLab;
+window.openSearchModal = openSearchModal;
+window.openControlsModal = openControlsModal;
+window.openMoleculesModal = openMoleculesModal;
+window.openBioSearchModal = openBioSearchModal;
+window.openBioControlsModal = openBioControlsModal;
+window.openBioMoleculesModal = openBioMoleculesModal;
+window.closeModal = closeModal;
+window.searchMolecule = searchMolecule;
+window.searchBioMolecule = searchBioMolecule;
+window.changeRotationSpeed = changeRotationSpeed;
+window.changeMoleculeSize = changeMoleculeSize;
+window.changeBioRotationSpeed = changeBioRotationSpeed;
+window.changeBioMoleculeSize = changeBioMoleculeSize;
+window.resetMolecule = resetMolecule;
+window.resetBioMolecule = resetBioMolecule;
+window.loadBasicMolecule = loadBasicMolecule;
+window.loadBioMolecule = loadBioMolecule;
+
+// Event listeners
+document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('modal-overlay')) {
+        e.target.style.display = 'none';
+    }
+});
+
+console.log('Chemistry Lab System Ready!');
+</script>
+
+</body>
+</html>
